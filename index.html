@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ames House Price Estimator</title>
+  <meta name="description" content="Estimate the sale price of a house in Ames, Iowa with a machine-learning model trained on 1,460 real sales.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <h1>Ames house price estimator</h1>
+    <p>Describe a house and a machine-learning model, trained on {{ "{:,}".format(meta.trained_on_houses) }} real sales in Ames, Iowa (2006–2010), estimates what it would sell for.</p>
+  </div>
+</header>
+
+<main class="wrap layout">
+  <form id="house-form" class="form" novalidate autocomplete="off">
+    <fieldset>
+      <legend>Location and quality</legend>
+      <div class="grid">
+        <label class="field wide">
+          <span>Neighbourhood</span>
+          <select name="Neighborhood" required>
+            {% for code, name in neighborhoods.items() %}
+            <option value="{{ code }}" {{ 'selected' if code == 'CollgCr' }}>{{ name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Overall quality</span>
+          <select name="OverallQual" required>
+            {% for n, text in [(10,'Very excellent'),(9,'Excellent'),(8,'Very good'),(7,'Good'),(6,'Above average'),(5,'Average'),(4,'Below average'),(3,'Fair'),(2,'Poor'),(1,'Very poor')] %}
+            <option value="{{ n }}" {{ 'selected' if n == 7 }}>{{ n }} – {{ text }}</option>
+            {% endfor %}
+          </select>
+          <small>Materials and finish of the whole house</small>
+        </label>
+        <label class="field">
+          <span>Kitchen quality</span>
+          <select name="KitchenQual" required>
+            {% for code, text in grades.items() %}<option value="{{ code }}" {{ 'selected' if code == 'Gd' }}>{{ text }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Exterior quality</span>
+          <select name="ExterQual" required>
+            {% for code, text in grades.items() %}<option value="{{ code }}" {{ 'selected' if code == 'Gd' }}>{{ text }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Central air conditioning</span>
+          <select name="CentralAir" required>
+            <option value="Y" selected>Yes</option>
+            <option value="N">No</option>
+          </select>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Age</legend>
+      <div class="grid">
+        <label class="field">
+          <span>Year built</span>
+          <input name="YearBuilt" type="number" inputmode="numeric" min="{{ limits.YearBuilt.min }}" max="{{ limits.YearBuilt.max }}" step="1" value="2003" required>
+        </label>
+        <label class="field">
+          <span>Year remodelled</span>
+          <input name="YearRemodAdd" type="number" inputmode="numeric" min="{{ limits.YearRemodAdd.min }}" max="{{ limits.YearRemodAdd.max }}" step="1" value="2003">
+          <small>Same as year built if never remodelled</small>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Size</legend>
+      <div class="grid">
+        <label class="field">
+          <span>First floor <em>sq ft</em></span>
+          <input name="1stFlrSF" type="number" inputmode="decimal" min="{{ limits['1stFlrSF'].min }}" max="{{ limits['1stFlrSF'].max }}" step="any" value="856" required>
+        </label>
+        <label class="field">
+          <span>Second floor <em>sq ft</em></span>
+          <input name="2ndFlrSF" type="number" inputmode="decimal" min="0" max="{{ limits['2ndFlrSF'].max }}" step="any" value="854" required>
+          <small>Enter 0 for a one-storey house</small>
+        </label>
+        <label class="field">
+          <span>Basement <em>sq ft</em></span>
+          <input name="TotalBsmtSF" type="number" inputmode="decimal" min="0" max="{{ limits.TotalBsmtSF.max }}" step="any" value="856" required>
+          <small>Enter 0 if there is no basement</small>
+        </label>
+        <label class="field">
+          <span>Lot size <em>sq ft</em></span>
+          <input name="LotArea" type="number" inputmode="decimal" min="{{ limits.LotArea.min }}" max="{{ limits.LotArea.max }}" step="any" value="8450" required>
+        </label>
+      </div>
+      <p class="derived">Living area above ground: <strong id="living-area">1,710</strong> sq ft</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Rooms and extras</legend>
+      <div class="grid four">
+        <label class="field">
+          <span>Bedrooms</span>
+          <input name="BedroomAbvGr" type="number" inputmode="numeric" min="0" max="{{ limits.BedroomAbvGr.max }}" step="1" value="3" required>
+        </label>
+        <label class="field">
+          <span>Full baths</span>
+          <input name="FullBath" type="number" inputmode="numeric" min="0" max="{{ limits.FullBath.max }}" step="1" value="2" required>
+        </label>
+        <label class="field">
+          <span>Half baths</span>
+          <input name="HalfBath" type="number" inputmode="numeric" min="0" max="{{ limits.HalfBath.max }}" step="1" value="1" required>
+        </label>
+        <label class="field">
+          <span>Fireplaces</span>
+          <input name="Fireplaces" type="number" inputmode="numeric" min="0" max="{{ limits.Fireplaces.max }}" step="1" value="0" required>
+        </label>
+        <label class="field">
+          <span>Garage (cars)</span>
+          <input name="GarageCars" type="number" inputmode="numeric" min="0" max="{{ limits.GarageCars.max }}" step="1" value="2" required>
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" id="submit">Estimate price</button>
+      <p class="fine">Everything not listed here is set to the typical value in the training data.</p>
+    </div>
+  </form>
+
+  <aside class="result" aria-labelledby="result-title">
+    <h2 id="result-title">Estimated sale price</h2>
+    <div id="result-live" aria-live="polite">
+      <div id="empty" class="empty">Enter the house details and choose <strong>Estimate price</strong>.</div>
+
+      <div id="output" hidden>
+        <p class="price" id="price">$0</p>
+        <p class="range">Likely range <strong id="range">$0 – $0</strong><br>
+          <span id="range-note">about ± 0 %</span>, the model's typical error in testing</p>
+
+        <figure class="ruler" aria-label="Where the estimate falls among all sale prices in the data">
+          <div class="track" id="track">
+            <div class="band" id="band"></div>
+            <div class="marker" id="marker"></div>
+          </div>
+          <div class="ticks" id="ticks"></div>
+          <figcaption>Position among the {{ "{:,}".format(meta.trained_on_houses) }} sales in the data. Ticks show the 5th, 25th, 50th, 75th and 95th percentile.</figcaption>
+        </figure>
+      </div>
+
+      <div id="error" class="error" role="alert" hidden></div>
+    </div>
+
+    <dl class="model">
+      <div><dt>Model</dt><dd>{{ meta.algorithm }}</dd></div>
+      <div><dt>Typical error</dt><dd>${{ "{:,.0f}".format(meta.cv_mean_rmse) }} (RMSE, 10-fold cross validation)</dd></div>
+    </dl>
+    <p class="disclaimer">This is a statistical estimate from 2006–2010 sales in Ames, Iowa. It is not an appraisal or the market value of a real house today.</p>
+  </aside>
+</main>
+
+<script>
+  window.APP = {
+    percentiles: {{ meta.price_percentiles | tojson }},
+    priceMin: {{ meta.price_min }},
+    priceMax: {{ meta.price_max }},
+    limits: {{ limits | tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
